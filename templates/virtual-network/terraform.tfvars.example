@@ -1,0 +1,19 @@
+prefix      = "demoaks"
+environment = "dev"
+location    = "eastus"
+address_space = [
+  "10.20.0.0/16"
+]
+subnets = {
+  app = {
+    address_prefixes  = ["10.20.1.0/24"]
+    service_endpoints = ["Microsoft.Storage"]
+  }
+  data = {
+    address_prefixes  = ["10.20.2.0/24"]
+    service_endpoints = ["Microsoft.KeyVault"]
+  }
+}
+tags = {
+  owner = "platform-team"
+}

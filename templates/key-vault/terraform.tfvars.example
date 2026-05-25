@@ -1,0 +1,6 @@
+prefix      = "demoaks"
+environment = "dev"
+location    = "eastus"
+tags = {
+  owner = "platform-team"
+}

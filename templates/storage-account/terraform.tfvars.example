@@ -1,0 +1,7 @@
+prefix          = "demoaks"
+environment     = "dev"
+location        = "eastus"
+container_names = ["artifacts", "backups"]
+tags = {
+  owner = "platform-team"
+}
