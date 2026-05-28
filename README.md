@@ -153,12 +153,11 @@ It runs only through manual `workflow_dispatch`, where it can `plan`, `apply`, o
 Set these GitHub repository secrets before using the manual deploy job:
 
 - `AZURE_CLIENT_ID`
-- `AZURE_CLIENT_SECRET`
 - `AZURE_TENANT_ID`
 - `AZURE_SUBSCRIPTION_ID`
 - `TF_VAR_ADMIN_SSH_PUBLIC_KEY`
 
-The workflow uses service principal client-secret authentication with Azure, so no federated credential setup is required.
+The workflow uses GitHub OIDC with Azure, so the Azure identity needs a federated credential that trusts this repository workflow. No client secret is required.
 
 Manual workflow inputs cover the basics:
 
