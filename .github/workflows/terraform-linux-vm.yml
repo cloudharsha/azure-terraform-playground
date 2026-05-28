@@ -30,7 +30,7 @@ on:
       vm_size:
         description: Azure VM size
         required: true
-        default: Standard_B2s
+        default: Standard_D2s_v5
         type: string
       ssh_allowed_cidrs:
         description: Terraform list syntax for allowed SSH CIDRs
@@ -108,6 +108,34 @@ jobs:
             echo "Registering ${namespace}..."
             az provider register --namespace "${namespace}" --wait
           done
+
+      - name: Check VM SKU availability
+        env:
+          LOCATION: ${{ inputs.location }}
+          VM_SIZE: ${{ inputs.vm_size }}
+        run: |
+          set -euo pipefail
+
+          sku_json="$(az vm list-skus \
+            --location "$LOCATION" \
+            --size "$VM_SIZE" \
+            --all \
+            --query "[?name=='$VM_SIZE'] | [0]" \
+            --output json)"
+
+          if [ "$sku_json" = "null" ]; then
+            echo "VM size '$VM_SIZE' was not found in Azure location '$LOCATION'."
+            exit 1
+          fi
+
+          restrictions_count="$(echo "$sku_json" | jq '.restrictions | length')"
+
+          if [ "$restrictions_count" -gt 0 ]; then
+            echo "VM size '$VM_SIZE' has availability restrictions in '$LOCATION'."
+            echo "$sku_json" | jq -r '.restrictions[] | "- " + (.reasonCode // "Restriction")'
+            echo "Choose another vm_size or location before running apply."
+            exit 1
+          fi
 
       - name: Terraform fmt
         working-directory: ${{ github.workspace }}

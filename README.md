@@ -165,6 +165,8 @@ The workflow explicitly registers the Azure resource providers required by the V
 - `Microsoft.Compute`
 - `Microsoft.Network`
 
+The workflow also checks the selected VM size before Terraform runs. If Azure reports capacity restrictions for that size in the selected location, choose another `vm_size` or `location` and run the workflow again.
+
 Manual workflow inputs cover the basics:
 
 - `prefix`
