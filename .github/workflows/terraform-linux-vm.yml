@@ -1,0 +1,130 @@
+name: Terraform Linux VM
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Terraform operation to run
+        required: true
+        default: plan
+        type: choice
+        options:
+          - plan
+          - apply
+          - destroy
+      prefix:
+        description: Short lower-case prefix for resource names
+        required: true
+        default: demovm
+        type: string
+      environment:
+        description: Environment tag
+        required: true
+        default: dev
+        type: string
+      location:
+        description: Azure region
+        required: true
+        default: eastus
+        type: string
+      vm_size:
+        description: Azure VM size
+        required: true
+        default: Standard_B2s
+        type: string
+      ssh_allowed_cidrs:
+        description: Terraform list syntax for allowed SSH CIDRs
+        required: true
+        default: "[\"0.0.0.0/0\"]"
+        type: string
+
+concurrency:
+  group: terraform-linux-vm
+  cancel-in-progress: false
+
+env:
+  AZURE_CORE_OUTPUT: none
+  TF_IN_AUTOMATION: true
+  TF_WORKING_DIR: templates/linux-vm
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_USE_OIDC: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Write Terraform variables
+        env:
+          ADMIN_SSH_PUBLIC_KEY: ${{ secrets.TF_VAR_ADMIN_SSH_PUBLIC_KEY }}
+        run: |
+          if [ -z "$ADMIN_SSH_PUBLIC_KEY" ]; then
+            echo "Repository secret TF_VAR_ADMIN_SSH_PUBLIC_KEY is required."
+            exit 1
+          fi
+
+          cat > github.auto.tfvars <<EOF
+          prefix               = "${{ inputs.prefix }}"
+          environment          = "${{ inputs.environment }}"
+          location             = "${{ inputs.location }}"
+          vm_size              = "${{ inputs.vm_size }}"
+          admin_ssh_public_key = "${ADMIN_SSH_PUBLIC_KEY}"
+          ssh_allowed_cidrs    = ${{ inputs.ssh_allowed_cidrs }}
+          EOF
+
+      - name: Terraform fmt
+        working-directory: ${{ github.workspace }}
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        run: terraform init
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        run: |
+          if [ "${{ inputs.operation }}" = "destroy" ]; then
+            terraform plan -destroy -input=false -no-color -out=tfplan
+          else
+            terraform plan -input=false -no-color -out=tfplan
+          fi
+
+      - name: Upload Terraform plan
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-linux-vm-plan-${{ github.run_id }}
+          path: ${{ env.TF_WORKING_DIR }}/tfplan
+          retention-days: 5
+
+      - name: Terraform apply
+        if: inputs.operation == 'apply' || inputs.operation == 'destroy'
+        run: terraform apply -input=false -no-color tfplan

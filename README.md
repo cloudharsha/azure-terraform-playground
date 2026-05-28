@@ -26,6 +26,7 @@ Additional standalone templates are included for:
 - `templates/key-vault`
 - `templates/log-analytics`
 - `templates/storage-account`
+- `templates/linux-vm`
 
 ## Repository structure
 
@@ -35,6 +36,7 @@ Additional standalone templates are included for:
 │   ├── aks
 │   ├── container-registry
 │   ├── key-vault
+│   ├── linux-virtual-machine
 │   ├── log-analytics
 │   ├── resource-group
 │   ├── storage-account
@@ -43,6 +45,7 @@ Additional standalone templates are included for:
     ├── aks-platform
     ├── container-registry
     ├── key-vault
+    ├── linux-vm
     ├── log-analytics
     ├── storage-account
     └── virtual-network
@@ -64,6 +67,14 @@ Creates an Azure Container Registry with configurable SKU and public network acc
 
 ### `modules/key-vault`
 Creates a Key Vault with RBAC enabled by default.
+
+### `modules/linux-virtual-machine`
+Creates a Linux VM with:
+
+- network interface
+- network security group with SSH access
+- optional public IP
+- SSH key-based admin access
 
 ### `modules/storage-account`
 Creates a Storage Account and optional blob containers.
@@ -106,6 +117,9 @@ Minimal starter for workspace-only deployments.
 ### `templates/storage-account`
 Minimal starter for storage account and container creation.
 
+### `templates/linux-vm`
+Minimal starter for a Linux VM deployment with its own VNet, subnet, public IP, and SSH access rule.
+
 ## Getting started
 
 Pick a template directory, then run Terraform from inside it.
@@ -119,6 +133,47 @@ terraform plan -var-file="terraform.tfvars.example"
 ```
 
 If you want to customize values first, use the included `terraform.tfvars.example` in that template as your starting point.
+
+Example using the Linux VM template:
+
+```bash
+cd templates/linux-vm
+terraform init
+terraform plan -var-file="terraform.tfvars.example"
+```
+
+The Linux VM template expects an SSH public key in `admin_ssh_public_key`. Restrict `ssh_allowed_cidrs` before deploying anything outside a sandbox or demo environment.
+
+## GitHub Actions deployment
+
+The repo now includes `.github/workflows/terraform-linux-vm.yml` for the `templates/linux-vm` template.
+
+It runs only through manual `workflow_dispatch`, where it can `plan`, `apply`, or `destroy` the Linux VM stack.
+
+Set these GitHub repository secrets before using the manual deploy job:
+
+- `AZURE_CLIENT_ID`
+- `AZURE_TENANT_ID`
+- `AZURE_SUBSCRIPTION_ID`
+- `TF_VAR_ADMIN_SSH_PUBLIC_KEY`
+
+The workflow uses GitHub OIDC with Azure, so the Azure identity also needs a federated credential that trusts this repository workflow.
+
+Manual workflow inputs cover the basics:
+
+- `prefix`
+- `environment`
+- `location`
+- `vm_size`
+- `ssh_allowed_cidrs`
+
+`ssh_allowed_cidrs` is passed in Terraform list syntax, for example:
+
+```text
+["203.0.113.10/32"]
+```
+
+This workflow is a good starting point for one-shot deploys. For long-lived environments, add a remote Terraform backend so state is preserved across runs.
 
 ## Naming notes
 

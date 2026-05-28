@@ -1,0 +1,10 @@
+prefix               = "demovm"
+environment          = "dev"
+location             = "eastus"
+vm_size              = "Standard_B2s"
+admin_username       = "azureuser"
+admin_ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIReplaceThisWithYourPublicKey"
+ssh_allowed_cidrs    = ["0.0.0.0/0"]
+tags = {
+  owner = "platform-team"
+}
