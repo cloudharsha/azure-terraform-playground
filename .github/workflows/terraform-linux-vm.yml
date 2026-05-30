@@ -123,11 +123,35 @@ jobs:
             --query "[?name=='$VM_SIZE'] | [0]" \
             --output json)"
 
+          print_sku_suggestions() {
+            available_skus="$(az vm list-skus --location "$LOCATION" --resource-type virtualMachines --all --output json)"
+
+            echo "Free-tier-friendly VM sizes available in '$LOCATION':"
+            echo "$available_skus" \
+              | jq -r '
+                [ .[] | select((.restrictions | length) == 0) | .name ] as $available
+                | ["Standard_B1s", "Standard_B2ats_v2", "Standard_B2pts_v2"][]
+                | select($available | index(.))
+              ' \
+              | sed '/^$/d' \
+              || true
+
+            echo "Small fallback VM sizes available in '$LOCATION':"
+            echo "$available_skus" \
+              | jq -r '
+                [ .[] | select((.restrictions | length) == 0) | .name ]
+                | unique
+                | map(select(test("^Standard_(B1|B2|DS1|DS2|D1|D2)")))
+                | .[:15]
+                | .[]
+              ' \
+              | sed '/^$/d' \
+              || true
+          }
+
           if [ "$sku_json" = "null" ]; then
             echo "VM size '$VM_SIZE' was not found in Azure location '$LOCATION'."
-            echo "Available small VM sizes in '$LOCATION':"
-            az vm list-skus --location "$LOCATION" --resource-type virtualMachines --all --output json \
-              | jq -r '[.[] | select((.restrictions | length) == 0) | .name] | unique | map(select(startswith("Standard_B") or startswith("Standard_DS") or startswith("Standard_D"))) | .[:15] | .[]'
+            print_sku_suggestions
             exit 1
           fi
 
@@ -137,9 +161,7 @@ jobs:
             echo "VM size '$VM_SIZE' has availability restrictions in '$LOCATION'."
             echo "$sku_json" | jq -r '.restrictions[] | "- " + (.reasonCode // "Restriction")'
             echo "Choose another vm_size or location before running apply."
-            echo "Available small VM sizes in '$LOCATION':"
-            az vm list-skus --location "$LOCATION" --resource-type virtualMachines --all --output json \
-              | jq -r '[.[] | select((.restrictions | length) == 0) | .name] | unique | map(select(startswith("Standard_B") or startswith("Standard_DS") or startswith("Standard_D"))) | .[:15] | .[]'
+            print_sku_suggestions
             exit 1
           fi
 
