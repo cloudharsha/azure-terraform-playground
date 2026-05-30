@@ -123,30 +123,63 @@ jobs:
             --query "[?name=='$VM_SIZE'] | [0]" \
             --output json)"
 
+          sku_is_unrestricted() {
+            local candidate="$1"
+            local candidate_json
+            local candidate_restrictions_count
+
+            candidate_json="$(az vm list-skus \
+              --location "$LOCATION" \
+              --size "$candidate" \
+              --all \
+              --query "[?name=='$candidate'] | [0]" \
+              --output json)"
+
+            if [ "$candidate_json" = "null" ]; then
+              return 1
+            fi
+
+            candidate_restrictions_count="$(echo "$candidate_json" | jq '.restrictions | length')"
+            [ "$candidate_restrictions_count" -eq 0 ]
+          }
+
           print_sku_suggestions() {
-            available_skus="$(az vm list-skus --location "$LOCATION" --resource-type virtualMachines --all --output json)"
+            local found_free_tier="false"
+            local found_fallback="false"
+            local fallback_candidates
 
             echo "Free-tier-friendly VM sizes available in '$LOCATION':"
-            echo "$available_skus" \
-              | jq -r '
-                [ .[] | select((.restrictions | length) == 0) | .name ] as $available
-                | ["Standard_B1s", "Standard_B2ats_v2", "Standard_B2pts_v2"][]
-                | select($available | index(.))
-              ' \
-              | sed '/^$/d' \
-              || true
+            for candidate in Standard_B1s Standard_B2ats_v2 Standard_B2pts_v2; do
+              if sku_is_unrestricted "$candidate"; then
+                echo "$candidate"
+                found_free_tier="true"
+              fi
+            done
+
+            if [ "$found_free_tier" = "false" ]; then
+              echo "(none found in this location for this subscription)"
+            fi
 
             echo "Small fallback VM sizes available in '$LOCATION':"
-            echo "$available_skus" \
+            fallback_candidates="$(az vm list-skus --location "$LOCATION" --resource-type virtualMachines --all --output json \
               | jq -r '
-                [ .[] | select((.restrictions | length) == 0) | .name ]
+                [ .[].name ]
                 | unique
-                | map(select(test("^Standard_(B1|B2|DS1|DS2|D1|D2)")))
-                | .[:15]
+                | map(select(test("^Standard_(B1|B2|DS1|DS2|D1|D2)(s)?(_v2|ats_v2|pts_v2)?$")))
+                | .[:25]
                 | .[]
-              ' \
-              | sed '/^$/d' \
-              || true
+              ')"
+
+            while IFS= read -r candidate; do
+              if [ -n "$candidate" ] && sku_is_unrestricted "$candidate"; then
+                echo "$candidate"
+                found_fallback="true"
+              fi
+            done <<< "$fallback_candidates"
+
+            if [ "$found_fallback" = "false" ]; then
+              echo "(none found in this location for this subscription)"
+            fi
           }
 
           if [ "$sku_json" = "null" ]; then
