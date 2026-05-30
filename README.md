@@ -148,7 +148,7 @@ The Linux VM template expects an SSH public key in `admin_ssh_public_key`. Restr
 
 The repo now includes `.github/workflows/terraform-linux-vm.yml` for the `templates/linux-vm` template.
 
-It runs only through manual `workflow_dispatch`, where it can `plan`, `apply`, or `destroy` the Linux VM stack.
+It runs only through manual `workflow_dispatch`, where it can discover usable free-tier VM SKUs, `plan`, `apply`, or `destroy` the Linux VM stack.
 
 Set these GitHub repository secrets before using the manual deploy job:
 
@@ -169,6 +169,7 @@ The workflow defaults to `Standard_B1s`, which is one of the Azure free account 
 
 Manual workflow inputs cover the basics:
 
+- `operation` (`discover-skus`, `plan`, `apply`, or `destroy`)
 - `prefix`
 - `environment`
 - `location`

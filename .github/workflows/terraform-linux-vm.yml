@@ -9,6 +9,7 @@ on:
         default: plan
         type: choice
         options:
+          - discover-skus
           - plan
           - apply
           - destroy
@@ -74,11 +75,13 @@ jobs:
           creds: '{"clientId":"${{ secrets.AZURE_CLIENT_ID }}","clientSecret":"${{ secrets.AZURE_CLIENT_SECRET }}","subscriptionId":"${{ secrets.AZURE_SUBSCRIPTION_ID }}","tenantId":"${{ secrets.AZURE_TENANT_ID }}"}'
 
       - name: Setup Terraform
+        if: inputs.operation != 'discover-skus'
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_wrapper: false
 
       - name: Write Terraform variables
+        if: inputs.operation != 'discover-skus'
         env:
           ADMIN_SSH_PUBLIC_KEY: ${{ secrets.TF_VAR_ADMIN_SSH_PUBLIC_KEY }}
           ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -102,7 +105,56 @@ jobs:
           ssh_allowed_cidrs    = ${{ inputs.ssh_allowed_cidrs }}
           EOF
 
+      - name: Discover free tier VM SKUs
+        if: inputs.operation == 'discover-skus'
+        run: |
+          set -euo pipefail
+
+          regions=(
+            eastus
+            eastus2
+            centralus
+            southcentralus
+            westus2
+            westus3
+            northcentralus
+            westcentralus
+          )
+
+          sizes=(
+            Standard_B1s
+            Standard_B2ats_v2
+            Standard_B2pts_v2
+          )
+
+          found="false"
+
+          echo "Checking free-tier-friendly VM sizes for this subscription..."
+
+          for region in "${regions[@]}"; do
+            for size in "${sizes[@]}"; do
+              sku_json="$(az vm list-skus \
+                --location "$region" \
+                --size "$size" \
+                --all \
+                --query "[?name=='$size'] | [0]" \
+                --output json)"
+
+              if [ "$sku_json" != "null" ] && [ "$(echo "$sku_json" | jq '.restrictions | length')" -eq 0 ]; then
+                echo "${region}: ${size}"
+                found="true"
+              fi
+            done
+          done
+
+          if [ "$found" = "false" ]; then
+            echo "No free-tier-friendly VM SKUs were available in the scanned regions."
+            echo "Try another Azure region, or check whether this subscription has VM quota/free-service restrictions."
+            exit 1
+          fi
+
       - name: Register Azure resource providers
+        if: inputs.operation != 'discover-skus'
         run: |
           for namespace in Microsoft.Compute Microsoft.Network; do
             echo "Registering ${namespace}..."
@@ -110,6 +162,7 @@ jobs:
           done
 
       - name: Check VM SKU availability
+        if: inputs.operation != 'discover-skus'
         env:
           LOCATION: ${{ inputs.location }}
           VM_SIZE: ${{ inputs.vm_size }}
@@ -199,16 +252,20 @@ jobs:
           fi
 
       - name: Terraform fmt
+        if: inputs.operation != 'discover-skus'
         working-directory: ${{ github.workspace }}
         run: terraform fmt -check -recursive
 
       - name: Terraform init
+        if: inputs.operation != 'discover-skus'
         run: terraform init
 
       - name: Terraform validate
+        if: inputs.operation != 'discover-skus'
         run: terraform validate
 
       - name: Terraform plan
+        if: inputs.operation != 'discover-skus'
         timeout-minutes: 20
         run: |
           if [ "${{ inputs.operation }}" = "destroy" ]; then
@@ -218,7 +275,7 @@ jobs:
           fi
 
       - name: Upload Terraform plan
-        if: success()
+        if: success() && inputs.operation != 'discover-skus'
         uses: actions/upload-artifact@v4
         with:
           name: terraform-linux-vm-plan-${{ github.run_id }}
