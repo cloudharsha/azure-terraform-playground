@@ -35,7 +35,7 @@ variable "vm_subnet_prefixes" {
 variable "vm_size" {
   description = "Azure VM size."
   type        = string
-  default     = "Standard_D2s_v5"
+  default     = "Standard_B1s"
 }
 
 variable "admin_username" {

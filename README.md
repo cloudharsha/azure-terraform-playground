@@ -165,7 +165,7 @@ The workflow explicitly registers the Azure resource providers required by the V
 - `Microsoft.Compute`
 - `Microsoft.Network`
 
-The workflow also checks the selected VM size before Terraform runs. If Azure reports capacity restrictions for that size in the selected location, choose another `vm_size` or `location` and run the workflow again.
+The workflow defaults to `Standard_B1s`, which is one of the Azure free account burstable VM sizes. Azure free account availability can still vary by subscription and region, so the workflow checks the selected VM size before Terraform runs. If Azure reports capacity restrictions, the workflow prints available small VM sizes from the same subscription and region.
 
 Manual workflow inputs cover the basics:
 
